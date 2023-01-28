@@ -1,5 +1,9 @@
-extern crate libc;
+extern crate rustix;
 
+use self::rustix::{
+    fd::FromRawFd,
+    mm::{self, MapFlags, MremapFlags, ProtFlags},
+};
 use core::ptr;
 use Allocator;
 
@@ -20,30 +24,33 @@ static mut LOCK: libc::pthread_mutex_t = libc::PTHREAD_MUTEX_INITIALIZER;
 unsafe impl Allocator for System {
     fn alloc(&self, size: usize) -> (*mut u8, usize, u32) {
         let addr = unsafe {
-            libc::mmap(
+            rustix::mm::mmap_anonymous(
                 0 as *mut _,
                 size,
-                libc::PROT_WRITE | libc::PROT_READ,
-                libc::MAP_ANON | libc::MAP_PRIVATE,
-                -1,
-                0,
+                ProtFlags::WRITE | ProtFlags::READ,
+                MapFlags::PRIVATE,
             )
         };
-        if addr == libc::MAP_FAILED {
-            (ptr::null_mut(), 0, 0)
-        } else {
+
+        if let Ok(addr) = addr {
             (addr as *mut u8, size, 0)
+        } else {
+            (ptr::null_mut(), 0, 0)
         }
     }
 
     #[cfg(target_os = "linux")]
     fn remap(&self, ptr: *mut u8, oldsize: usize, newsize: usize, can_move: bool) -> *mut u8 {
-        let flags = if can_move { libc::MREMAP_MAYMOVE } else { 0 };
-        let ptr = unsafe { libc::mremap(ptr as *mut _, oldsize, newsize, flags) };
-        if ptr == libc::MAP_FAILED {
-            ptr::null_mut()
+        let flags = if can_move {
+            MremapFlags::MAYMOVE
         } else {
+            MremapFlags::empty()
+        };
+        let ptr = unsafe { mm::mremap(ptr as *mut _, oldsize, newsize, flags) };
+        if let Ok(ptr) = ptr {
             ptr as *mut u8
+        } else {
+            ptr::null_mut()
         }
     }
 
@@ -55,21 +62,21 @@ unsafe impl Allocator for System {
     #[cfg(target_os = "linux")]
     fn free_part(&self, ptr: *mut u8, oldsize: usize, newsize: usize) -> bool {
         unsafe {
-            let rc = libc::mremap(ptr as *mut _, oldsize, newsize, 0);
-            if rc != libc::MAP_FAILED {
+            let rc = mm::mremap(ptr as *mut _, oldsize, newsize, MremapFlags::empty());
+            if rc.is_ok() {
                 return true;
             }
-            libc::munmap(ptr.offset(newsize as isize) as *mut _, oldsize - newsize) == 0
+            mm::munmap(ptr.offset(newsize as isize) as *mut _, oldsize - newsize).is_ok()
         }
     }
 
     #[cfg(target_os = "macos")]
     fn free_part(&self, ptr: *mut u8, oldsize: usize, newsize: usize) -> bool {
-        unsafe { libc::munmap(ptr.offset(newsize as isize) as *mut _, oldsize - newsize) == 0 }
+        unsafe { mm::munmap(ptr.offset(newsize as isize) as *mut _, oldsize - newsize).is_ok() }
     }
 
     fn free(&self, ptr: *mut u8, size: usize) -> bool {
-        unsafe { libc::munmap(ptr as *mut _, size) == 0 }
+        unsafe { mm::munmap(ptr as *mut _, size).is_ok() }
     }
 
     fn can_release_part(&self, _flags: u32) -> bool {
