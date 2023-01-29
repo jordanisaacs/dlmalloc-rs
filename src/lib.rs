@@ -97,7 +97,6 @@ mod sys;
 impl Dlmalloc<System> {
     /// Creates a new instance of an allocator
     pub const fn new() -> Dlmalloc<System> {
-        let x = rustix::mm::MapFlags::empty();
         Dlmalloc(dlmalloc::Dlmalloc::new(System::new()))
     }
 }

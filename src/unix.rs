@@ -1,9 +1,6 @@
 extern crate rustix;
 
-use self::rustix::{
-    fd::FromRawFd,
-    mm::{self, MapFlags, MremapFlags, ProtFlags},
-};
+use self::rustix::mm::{self, MapFlags, MremapFlags, ProtFlags};
 use core::ptr;
 use Allocator;
 
@@ -19,7 +16,7 @@ impl System {
 }
 
 #[cfg(feature = "global")]
-static mut LOCK: libc::pthread_mutex_t = libc::PTHREAD_MUTEX_INITIALIZER;
+static mut LOCK: c_scape::pthread_mutex_t = c_scape::PTHREAD_MUTEX_INITIALIZER;
 
 unsafe impl Allocator for System {
     fn alloc(&self, size: usize) -> (*mut u8, usize, u32) {
@@ -94,12 +91,12 @@ unsafe impl Allocator for System {
 
 #[cfg(feature = "global")]
 pub fn acquire_global_lock() {
-    unsafe { assert_eq!(libc::pthread_mutex_lock(&mut LOCK), 0) }
+    unsafe { assert_eq!(c_scape::pthread_mutex_lock(&mut LOCK), 0) }
 }
 
 #[cfg(feature = "global")]
 pub fn release_global_lock() {
-    unsafe { assert_eq!(libc::pthread_mutex_unlock(&mut LOCK), 0) }
+    unsafe { assert_eq!(c_scape::pthread_mutex_unlock(&mut LOCK), 0) }
 }
 
 #[cfg(feature = "global")]
@@ -129,7 +126,7 @@ pub unsafe fn enable_alloc_after_fork() {
     // protecting it from deadlock,
     // due to the child being created with only the calling thread.
     if !FORK_PROTECTED {
-        libc::pthread_atfork(
+        c_scape::pthread_atfork(
             Some(_acquire_global_lock),
             Some(_release_global_lock),
             Some(_release_global_lock),

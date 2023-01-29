@@ -12,13 +12,14 @@ A Rust port of the dlmalloc allocator
 """
 
 [package.metadata.docs.rs]
-# features = ['global']
+features = ['global']
 
 [lib]
 doctest = false
 
 [target.'cfg(all(unix, not(target_arch = "wasm32")))'.dependencies]
 rustix = { version = "0.36.7", default-features = false, features = ["mm"]}
+c-scape = { version = "0.6.1", default-features = false, features = ["threads"], optional = true }
 
 [dependencies]
 # For more information on these dependencies see rust-lang/rust's
@@ -35,7 +36,7 @@ debug-assertions = true
 [features]
 # Enable implementations of the `GlobalAlloc` standard library API, exporting a
 # new `GlobalDlmalloc` as well which implements this trait.
-global = []
+global = ["c-scape"]
 
 # Enable very expensive debug checks in this crate
 debug = []
